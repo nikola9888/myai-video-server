@@ -11,6 +11,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"status": "video server online"}
+
 @app.get("/videos/search")
 def search_videos(q: str = Query(...)):
     ydl_opts = {
@@ -28,10 +32,13 @@ def search_videos(q: str = Query(...)):
         result = ydl.extract_info(query, download=False)
 
         for e in result.get("entries", []):
+            if not e:
+                continue
+
             videos.append({
                 "title": e.get("title"),
                 "video_url": f"https://youtube.com/watch?v={e.get('id')}",
                 "thumbnail": e.get("thumbnail"),
             })
 
-    return videos
+    return {"results": videos}
