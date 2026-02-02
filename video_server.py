@@ -1,44 +1,41 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
-import yt_dlp
+from fastapi import FastAPI
+import os
+import requests
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+YOUTUBE_API_KEY = os.getenv("YT_API_KEY")
+
 
 @app.get("/")
 def root():
-    return {"status": "video server online"}
+    return {"status": "video server alive"}
+
 
 @app.get("/videos/search")
-def search_videos(q: str = Query(...)):
-    ydl_opts = {
-        "quiet": True,
-        "skip_download": True,
-        "extract_flat": True,
-        "forcejson": True,
+def search_videos(q: str):
+    if not YOUTUBE_API_KEY:
+        return []
+
+    url = "https://www.googleapis.com/youtube/v3/search"
+    params = {
+        "part": "snippet",
+        "q": q,
+        "key": YOUTUBE_API_KEY,
+        "maxResults": 6,
+        "type": "video"
     }
 
-    query = f"ytsearch7:{q} shorts"
+    r = requests.get(url, params=params, timeout=10)
+    data = r.json()
 
     videos = []
+    for item in data.get("items", []):
+        videos.append({
+            "title": item["snippet"]["title"],
+            "thumb": item["snippet"]["thumbnails"]["medium"]["url"],
+            "url": f"https://www.youtube.com/watch?v={item['id']['videoId']}"
+        })
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        result = ydl.extract_info(query, download=False)
-
-        for e in result.get("entries", []):
-            if not e:
-                continue
-
-            videos.append({
-                "title": e.get("title"),
-                "video_url": f"https://youtube.com/watch?v={e.get('id')}",
-                "thumbnail": e.get("thumbnail"),
-            })
-
-    return {"results": videos}
+    return videos
+    
