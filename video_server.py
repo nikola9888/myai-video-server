@@ -4,7 +4,7 @@ import requests
 
 app = FastAPI()
 
-YOUTUBE_API_KEY = os.getenv("YT_API_KEY")
+YOUTUBE_API_KEY = os.getenv("AIzaSyDAyoNnRdGKoWVyTuGaK0S6Ks6V01Zhj6Y")
 
 
 @app.get("/")
