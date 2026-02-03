@@ -11,10 +11,6 @@ YOUTUBE_API_KEY = os.getenv("AIzaSyDAyoNnRdGKoWVyTuGaK0S6Ks6V01Zhj6Y")
 def root():
     return {"status": "video server alive"}
     
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("video_servis:app", host="0.0.0.0", port=10000)
-
 @app.get("/videos/search")
 def search_videos(q: str):
     if not YOUTUBE_API_KEY:
