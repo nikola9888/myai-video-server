@@ -13,7 +13,7 @@ def root():
     
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("video_server:app", host="0.0.0.0", port=10000)
+    uvicorn.run("video_servis:app", host="0.0.0.0", port=10000)
 
 @app.get("/videos/search")
 def search_videos(q: str):
