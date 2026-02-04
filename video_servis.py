@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 import requests
 import os
 
@@ -7,29 +7,32 @@ app = FastAPI()
 YOUTUBE_API_KEY = os.getenv("AIzaSyDAyoNnRdGKoWVyTuGaK0S6Ks6V01Zhj6Y")
 
 @app.get("/videos/search")
-def search_videos(q: str = Query(...)):
-    if not YOUTUBE_API_KEY:
-        return {"error": "YOUTUBE_API_KEY missing"}
-
+def search_videos(q: str):
     url = "https://www.googleapis.com/youtube/v3/search"
+
     params = {
-        "part": "snippet",
-        "q": q,
         "key": YOUTUBE_API_KEY,
+        "q": q,
+        "part": "snippet",
+        "type": "video",
         "maxResults": 5,
-        "type": "video"
+        "regionCode": "RS",
+        "relevanceLanguage": "sr"
     }
 
     r = requests.get(url, params=params)
     data = r.json()
 
-    videos = []
+    print("YOUTUBE RAW:", data)  # 🔥 OVO JE KLJUČNO
+
+    results = []
+
     for item in data.get("items", []):
-        videos.append({
+        results.append({
             "title": item["snippet"]["title"],
-            "thumbnail": item["snippet"]["thumbnails"]["medium"]["url"],
-            "video_id": item["id"]["videoId"]
+            "video_id": item["id"]["videoId"],
+            "thumbnail": item["snippet"]["thumbnails"]["high"]["url"]
         })
 
-    return videos
+    return results
     
