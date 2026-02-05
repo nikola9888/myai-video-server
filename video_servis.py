@@ -4,7 +4,7 @@ import os
 
 app = FastAPI()
 
-YOUTUBE_API_KEY = os.getenv("AIzaSyDAyoNnRdGKoWVyTuGaK0S6Ks6V01Zhj6Y")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 @app.get("/videos/search")
 def search_videos(q: str):
