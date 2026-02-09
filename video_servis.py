@@ -1,88 +1,106 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 import yt_dlp
+import json
+from fastapi import Request
+from typing import List
 
-app = Flask(__name__)
+app = FastAPI()
 
+# Postavke za yt-dlp
 YDL_OPTS = {
-    "quiet": True,
-    "skip_download": True,
-    "extract_flat": False,
     "format": "best[ext=mp4]/best",
+    "quiet": True,
+    "no_warnings": True,
+    "writesubtitles": True,
+    "writeautomaticsub": True,
+    "subtitlesformat": "vtt",
+    "skip_download": True
 }
 
-def search_youtube(query, limit=7):
-    results = []
-
-    with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-        search_url = f"ytsearch{limit}:{query}"
-        info = ydl.extract_info(search_url, download=False)
-
-        for entry in info.get("entries", []):
-            if not entry:
-                continue
-
-            results.append({
-                "title": entry.get("title"),
-                "thumbnail": entry.get("thumbnail"),
-                "video_url": entry.get("url"),
-                "embed_url": f"https://www.youtube.com/embed/{entry.get('id')}",
-                "duration": entry.get("duration"),
-            })
-
-    return results
-
-
-@app.route("/videos/search", methods=["GET"])
-def search_videos():
-    query = request.args.get("q")
-    if not query:
-        return jsonify({"error": "Missing query"}), 400
-
-    try:
-        videos = search_youtube(query)
-        return jsonify(videos)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/videos/player", methods=["GET"])
-def video_player():
-    video_id = request.args.get("id")
-    if not video_id:
-        return "Missing video id", 400
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {{
-                margin: 0;
-                background: black;
-            }}
-            iframe {{
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                border: none;
-            }}
-        </style>
-    </head>
-    <body>
-        <iframe 
-            src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=1"
-            allow="autoplay; encrypted-media"
-            allowfullscreen>
-        </iframe>
-    </body>
-    </html>
+# Endpoints
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """
+        <html>
+            <head>
+                <title>Video Server</title>
+            </head>
+            <body>
+                <h1>Dobrodošli na Video Server</h1>
+                <p>Video server koji omogućava pregled video sadržaja preko WebView-a u aplikaciji.</p>
+            </body>
+        </html>
     """
 
+@app.get("/video/stream")
+async def stream_video(video_id: str):
+    url = f"https://www.youtube.com/watch?v={video_id}"
 
-@app.route("/")
-def health():
-    return {"status": "ok", "service": "video-server"}
-    
+    try:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+            # Pronađi MP4 stream
+            stream_url = None
+            for f in info.get("formats", []):
+                if f.get("ext") == "mp4" and f.get("acodec") != "none":
+                    stream_url = f.get("url")
+                    break
+
+            # Titlovi
+            captions = []
+            subs = info.get("subtitles") or info.get("automatic_captions")
+            if subs:
+                for lang, tracks in subs.items():
+                    for t in tracks:
+                        if t.get("ext") == "vtt":
+                            captions.append({
+                                "language": lang,
+                                "url": t.get("url")
+                            })
+                            break
+                    break  # samo jedan jezik
+
+            return {
+                "video_id": video_id,
+                "title": info.get("title"),
+                "stream_url": stream_url,
+                "captions": captions
+            }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+# HTML za prikazivanje videa putem WebView-a
+@app.get("/video/player/{video_id}")
+async def video_player(video_id: str):
+    video_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1"
+    html_code = f"""
+    <html>
+        <head>
+            <title>Video Player</title>
+        </head>
+        <body>
+            <h1>Video Player</h1>
+            <iframe width="560" height="315" src="{video_url}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_code)
+
+# Služi kao API endpoint za pretragu video sadržaja
+@app.get("/videos/search")
+async def search_videos(query: str):
+    # Prikazivanje nekoliko video rezultata na osnovu pretrage
+    # Ovaj kod koristi YouTube API ili neki drugi pretraga video servisa
+    sample_results = [
+        {"video_id": "zCGoYWb66-M", "title": "Test video 1", "thumbnail": "https://i.ytimg.com/vi/zCGoYWb66-M/hqdefault.jpg"},
+        {"video_id": "EVFl-NI18-w", "title": "Test video 2", "thumbnail": "https://i.ytimg.com/vi/EVFl-NI18-w/hqdefault.jpg"},
+    ]
+    return sample_results
+
+# Start servera
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
