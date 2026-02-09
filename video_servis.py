@@ -1,124 +1,88 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
+from flask import Flask, request, jsonify
 import yt_dlp
-import subprocess
-import os
-import uuid
 
-BASE_URL = "https://video-server-py-1l4e.onrender.com"
+app = Flask(__name__)
 
-app = FastAPI(title="MyAI Video Server")
+YDL_OPTS = {
+    "quiet": True,
+    "skip_download": True,
+    "extract_flat": False,
+    "format": "best[ext=mp4]/best",
+}
 
-# ===== PATHS =====
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TRAILER_DIR = os.path.join(BASE_DIR, "static", "trailers")
-THUMB_DIR = os.path.join(BASE_DIR, "static", "thumbs")
-
-os.makedirs(TRAILER_DIR, exist_ok=True)
-os.makedirs(THUMB_DIR, exist_ok=True)
-
-# ===== STATIC =====
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-
-# =========================================================
-# 🎞️ VIDEO SEARCH + TRAILER GENERATION
-# =========================================================
-@app.get("/videos/search")
-def search_videos(q: str):
-    ydl_opts = {
-        "quiet": True,
-        "extract_flat": True,
-        "skip_download": True
-    }
-
+def search_youtube(query, limit=7):
     results = []
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        search = ydl.extract_info(f"ytsearch7:{q}", download=False)
+    with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
+        search_url = f"ytsearch{limit}:{query}"
+        info = ydl.extract_info(search_url, download=False)
 
-    for entry in search.get("entries", []):
-        video_id = entry["id"]
-        title = entry["title"]
-        thumb_url = entry["thumbnail"]
+        for entry in info.get("entries", []):
+            if not entry:
+                continue
 
-        local_trailer = os.path.join(TRAILER_DIR, f"{video_id}.mp4")
+            results.append({
+                "title": entry.get("title"),
+                "thumbnail": entry.get("thumbnail"),
+                "video_url": entry.get("url"),
+                "embed_url": f"https://www.youtube.com/embed/{entry.get('id')}",
+                "duration": entry.get("duration"),
+            })
 
-        # 🎬 GENERATE TRAILER IF NOT EXISTS
-        if not os.path.exists(local_trailer):
-            generate_trailer(video_id, local_trailer)
-
-        results.append({
-            "id": video_id,
-            "title": title,
-            "thumbnail": thumb_url,
-            "trailer_url": f"{BASE_URL}/static/trailers/{video_id}.mp4",
-            "player_url": f"{BASE_URL}/player/{video_id}"
-        })
-
-    return JSONResponse(results)
+    return results
 
 
-# =========================================================
-# ✂️ TRAILER GENERATOR (7s, no audio)
-# =========================================================
-def generate_trailer(video_id, out_path):
-    url = f"https://www.youtube.com/watch?v={video_id}"
-
-    tmp_file = f"/tmp/{uuid.uuid4()}.mp4"
-
-    ydl_opts = {
-        "format": "mp4",
-        "outtmpl": tmp_file,
-        "quiet": True
-    }
+@app.route("/videos/search", methods=["GET"])
+def search_videos():
+    query = request.args.get("q")
+    if not query:
+        return jsonify({"error": "Missing query"}), 400
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-
-        subprocess.run([
-            "ffmpeg",
-            "-y",
-            "-i", tmp_file,
-            "-t", "7",
-            "-an",
-            "-movflags", "faststart",
-            out_path
-        ], check=True)
-
+        videos = search_youtube(query)
+        return jsonify(videos)
     except Exception as e:
-        print("TRAILER ERROR:", e)
-
-    finally:
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+        return jsonify({"error": str(e)}), 500
 
 
-# =========================================================
-# ▶️ UNIFIED PROFESSIONAL PLAYER
-# =========================================================
-@app.get("/player/{video_id}", response_class=HTMLResponse)
-def player(request: Request, video_id: str):
-    video_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1&controls=1&rel=0"
+@app.route("/videos/player", methods=["GET"])
+def video_player():
+    video_id = request.args.get("id")
+    if not video_id:
+        return "Missing video id", 400
 
-    return templates.TemplateResponse(
-        "player.html",
-        {
-            "request": request,
-            "video_url": video_url
-        }
-    )
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{
+                margin: 0;
+                background: black;
+            }}
+            iframe {{
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+        </style>
+    </head>
+    <body>
+        <iframe 
+            src="https://www.youtube.com/embed/{video_id}?autoplay=1&controls=1"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+        </iframe>
+    </body>
+    </html>
+    """
 
 
-# =========================================================
-# ❤️ HEALTH CHECK
-# =========================================================
-@app.get("/")
+@app.route("/")
 def health():
-    return {"status": "OK", "message": "MyAI Video Server running"}
+    return {"status": "ok", "service": "video-server"}
     
