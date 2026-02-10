@@ -92,6 +92,8 @@ async def video_player(video_id: str):
 # Služi kao API endpoint za pretragu video sadržaja
 @app.get("/videos/search")
 async def search_videos(query: str):
+    print(f"Received query: {query}")  # Debug log
+    # Ostatak koda
     # Prikazivanje nekoliko video rezultata na osnovu pretrage
     # Ovaj kod koristi YouTube API ili neki drugi pretraga video servisa
     sample_results = [
