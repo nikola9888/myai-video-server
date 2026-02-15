@@ -89,19 +89,33 @@ async def video_player(video_id: str):
     """
     return HTMLResponse(content=html_code)
 
-# Služi kao API endpoint za pretragu video sadržaja
+    # Služi kao API endpoint za pretragu video sadržaja.
+
 @app.get("/videos/search")
 async def search_videos(query: str):
-    print(f"Received query: {query}")  # Debug log
-    # Ostatak koda
-    # Prikazivanje nekoliko video rezultata na osnovu pretrage
-    # Ovaj kod koristi YouTube API ili neki drugi pretraga video servisa
-    sample_results = [
-        {"video_id": "zCGoYWb66-M", "title": "Test video 1", "thumbnail": "https://i.ytimg.com/vi/zCGoYWb66-M/hqdefault.jpg"},
-        {"video_id": "EVFl-NI18-w", "title": "Test video 2", "thumbnail": "https://i.ytimg.com/vi/EVFl-NI18-w/hqdefault.jpg"},
-    ]
-    return sample_results
+    try:
+        search_query = f"ytsearch10:{query}"
 
+        with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+            results = ydl.extract_info(search_query, download=False)
+
+        videos = []
+
+        for entry in results.get("entries", []):
+            if not entry:
+                continue
+
+            videos.append({
+                "video_id": entry.get("id"),
+                "title": entry.get("title"),
+                "thumbnail": entry.get("thumbnail")
+            })
+
+        return videos
+
+    except Exception as e:
+        return {"error": str(e)}
+        
 # Start servera
 if __name__ == "__main__":
     import uvicorn
